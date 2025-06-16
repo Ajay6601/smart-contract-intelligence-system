@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # Frontend React Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend.Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  # Python FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - DEBUG=true
+      - PORT=8000
+      - MONGODB_URL=mongodb://mongodb:27017/smart_contracts
+      - BLOCKCHAIN_SERVICE_URL=http://blockchain:8080
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-for-development}
+      - ETH_RPC_URL=${ETH_RPC_URL:-https://mainnet.infura.io/v3/your-infura-key}
+    depends_on:
+      - mongodb
+      - blockchain
+    networks:
+      - app-network
+
+  # Go Blockchain Service
+  blockchain:
+    build:
+      context: ./blockchain
+      dockerfile: ../docker/blockchain.Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./blockchain:/app
+    environment:
+      - PORT=8080
+      - MONGODB_URL=mongodb://mongodb:27017/smart_contracts
+      - ETH_RPC_URL=${ETH_RPC_URL:-https://mainnet.infura.io/v3/your-infura-key}
+      - ETH_PRIVATE_KEY=${ETH_PRIVATE_KEY}
+    depends_on:
+      - mongodb
+    networks:
+      - app-network
+
+  # MongoDB Database
+  mongodb:
+    image: mongo:6.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - app-network
+
+  # Solidity Compiler Service
+  solc:
+    image: ethereum/solc:0.8.17
+    entrypoint: ["solc"]
+    volumes:
+      - ./blockchain/contracts:/contracts
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
